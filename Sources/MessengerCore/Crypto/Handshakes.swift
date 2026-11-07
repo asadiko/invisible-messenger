@@ -147,6 +147,8 @@ public final class PairingHandshake: HandshakeMachine {
     private var keyJH = Data(), keyHJ = Data(), keySAS = Data(), okm = Data()
 
     public private(set) var result: PairingResult?
+    /// True once the joiner has sent its sealed identity (a hang-up after this means the host rejected the code).
+    public private(set) var sentIdentity = false
 
     public init(role: Role, code: String, identity: DeviceIdentity, displayName: String) {
         self.role = role
@@ -179,6 +181,7 @@ public final class PairingHandshake: HandshakeMachine {
             try checkVersion(hello.v)
             try deriveKeys(peerEph: hello.eph, nonceJ: nonce, nonceH: hello.nonce, transcript: firstMessage + message)
             state = .awaitingIdentity
+            sentIdentity = true
             return try sealedIdentity(key: keyJH)
 
         case (.host, .awaitingIdentity):

@@ -32,8 +32,8 @@ final class HandshakeDriver {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.timeout) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.completion != nil else { return }
-                self.connection.close()
                 self.finish(.failure(HandshakeTimeout()))
+                self.connection.close()
             }
         }
     }
@@ -44,8 +44,9 @@ final class HandshakeDriver {
             if let reply = try machine.receive(frame) { connection.send(reply) }
             if isComplete() { finish(.success(())) }
         } catch {
-            connection.close()
+            // Report the real error first; closing would otherwise report a generic failure.
             finish(.failure(error))
+            connection.close()
         }
     }
 

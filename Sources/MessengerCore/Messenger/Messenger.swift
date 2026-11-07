@@ -90,7 +90,11 @@ public final class Messenger {
     private var outgoingInFlight: [UUID: ObjectIdentifier] = [:]
     private var ticker: Task<Void, Never>?
     var pairingConnectionHandler: ((FramedConnection, Data) -> Void)?
-    var onDiscoveredChange: (() -> Void)?
+    var hostingPairing: PairingSession?
+    /// How long a pairing code stays valid.
+    var pairingTimeout: TimeInterval = 300
+    /// How long a joiner waits to see a Mac that is showing a code.
+    var pairingSearchTimeout: TimeInterval = 8
 
     public init(_ config: Configuration) {
         identity = config.identity
@@ -118,6 +122,7 @@ public final class Messenger {
     }
 
     public func stop() {
+        hostingPairing?.cancel()
         ticker?.cancel()
         ticker = nil
         directory.stop()
@@ -235,7 +240,6 @@ public final class Messenger {
         for id in firstSeen.keys where !names.contains(id.rawValue) {
             firstSeen[id] = nil
         }
-        onDiscoveredChange?()
         tick()
     }
 
