@@ -1,13 +1,33 @@
 import AppKit
 import MessengerCore
+import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var model: AppModel!
 
+    #if DEBUG
+    private var previewPanel: KeyablePanel?
+    #endif
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         model = AppModel.bootstrap()
         model.start()
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["IM_PREVIEW_CHAT"] == "1" { showPreview() }
+        #endif
     }
+
+    #if DEBUG
+    /// Development aid: the chat in a plain 660×520 panel, for screenshots before the notch panel exists.
+    private func showPreview() {
+        let panel = KeyablePanel(contentRect: NSRect(x: 200, y: 200, width: 660, height: 520), styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.level = .floating
+        panel.contentView = NSHostingView(rootView: PanelRoot(model: model, chrome: ChatChrome()))
+        panel.makeKeyAndOrderFront(nil)
+        model.chatVisible = true
+        previewPanel = panel
+    }
+    #endif
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         false
