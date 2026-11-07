@@ -50,11 +50,13 @@ public final class FramedConnection {
         receiveNext()
     }
 
-    public func send(_ payload: Data) {
+    /// `completion` runs once the frame has been handed to the network stack (not if the connection fails).
+    public func send(_ payload: Data, completion: (@MainActor @Sendable () -> Void)? = nil) {
         guard !closed else { return }
         connection.send(content: Framing.encode(payload), completion: .contentProcessed { [weak self] error in
-            guard let error else { return }
-            MainActor.assumeIsolated { self?.finish(error) }
+            MainActor.assumeIsolated {
+                if let error { self?.finish(error) } else { completion?() }
+            }
         })
     }
 

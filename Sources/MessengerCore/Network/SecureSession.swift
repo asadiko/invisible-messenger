@@ -115,10 +115,10 @@ public final class SecureSession {
             }
     }
 
-    public func send(_ message: WireMessage) {
+    public func send(_ message: WireMessage, completion: (@MainActor @Sendable () -> Void)? = nil) {
         guard !closed else { return }
         do {
-            connection.send(try channel.seal(message.encoded()))
+            connection.send(try channel.seal(message.encoded()), completion: completion)
         } catch {
             close()
         }
