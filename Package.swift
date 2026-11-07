@@ -21,5 +21,10 @@ let package = Package(
             name: "MessengerCoreTests",
             dependencies: ["MessengerCore"]
         ),
+        .testTarget(
+            name: "InvisibleMessengerTests",
+            dependencies: ["InvisibleMessenger", "MessengerCore"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
     ]
 )

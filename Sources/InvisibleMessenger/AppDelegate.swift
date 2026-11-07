@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         observeAppearance()
         registerHotKey()
         observeHotKey()
+        if captureDemoRequested { showCaptureDemo() }
         #if DEBUG
         if ProcessInfo.processInfo.environment["IM_OPEN_ON_LAUNCH"] == "1" {
             settings.appearance == .notch ? notch.openPinned() : floating.show(focus: false)
@@ -65,16 +66,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     if confirmAt == nil { confirmAt = Date().addingTimeInterval(2) }
                     if let at = confirmAt, Date() >= at { model.pairing?.confirm(true); confirmAt = nil }
                 }
-                if let text = env["IM_DEBUG_SEND"], !sent, let contact = model.contacts.first, model.isOnline(contact.id) {
+                if !sent, let contact = model.contacts.first, model.isOnline(contact.id),
+                   env["IM_DEBUG_SEND"] != nil || env["IM_DEBUG_SEND_FILE"] != nil {
                     sent = true
                     model.screen = .chat
                     model.selectedContactID = contact.id
-                    model.send(text: text)
+                    if let text = env["IM_DEBUG_SEND"] { model.send(text: text) }
+                    if let path = env["IM_DEBUG_SEND_FILE"] { model.attach([.file(URL(fileURLWithPath: path))]) }
                 }
             }
         }
     }
     #endif
+
+    /// IM_CAPTURE_DEMO=1 opens every kind of window at once for scripts/capture-check.sh.
+    /// Release builds honour it only for the throwaway "capturecheck" profile.
+    private var captureDemoRequested: Bool {
+        guard ProcessInfo.processInfo.environment["IM_CAPTURE_DEMO"] == "1" else { return false }
+        #if DEBUG
+        return true
+        #else
+        return model.profile.name == "capturecheck"
+        #endif
+    }
+
+    private func showCaptureDemo() {
+        notch.mode = .full
+        notch.openPinned()
+        floating.show(focus: false)
+        if let image = model.messages.first(where: {
+            if case .attachment(let info) = $0.body { return info.kind == .image } else { return false }
+        }), let data = model.attachmentData(image), let picture = NSImage(data: data) {
+            ImageViewerController.shared.show(image: picture, message: image, model: model)
+        }
+        let open = NSOpenPanel()
+        open.canChooseDirectories = false
+        HiddenWindowGuard.protect(open)
+        open.begin { _ in }
+        HiddenWindowGuard.protect(open)
+    }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showChat()

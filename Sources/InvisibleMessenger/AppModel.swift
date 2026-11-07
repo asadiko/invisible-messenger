@@ -155,6 +155,8 @@ final class AppModel {
             selectedContactID = contacts.first?.id
         }
         if let selectedContactID { messages = store.messages(for: selectedContactID) }
+        // A message announced just before this refresh may belong to the chat that is open right now.
+        markReadIfVisible()
     }
 
     private func reloadMessages() {
