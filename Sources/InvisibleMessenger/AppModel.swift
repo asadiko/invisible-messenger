@@ -57,6 +57,7 @@ final class AppModel {
     var lastIncomingFrom: DeviceID?
 
     @ObservationIgnored private var noticeTask: Task<Void, Never>?
+    @ObservationIgnored lazy var lock = AppLock(model: self)
 
     var totalUnread: Int { contacts.reduce(0) { $0 + $1.unreadCount } }
     var selectedContact: Contact? { contacts.first { $0.id == selectedContactID } }

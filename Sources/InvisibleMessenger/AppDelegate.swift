@@ -7,11 +7,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var notch: NotchController!
     private(set) var floating: FloatingController!
     private var hotKey: HotKey?
+    private var idleMonitor: IdleMonitor?
     private var settings: AppSettings { model.settings }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model = AppModel.bootstrap()
+        #if DEBUG
+        if let password = ProcessInfo.processInfo.environment["IM_DEBUG_SET_PASSWORD"] {
+            try? model.lock.setPassword(password)
+            model.settings.lockType = .password
+        }
+        #endif
+        model.lock.lockIfEnabled()
         model.start()
+        idleMonitor = IdleMonitor(settings: model.settings) { [weak self] in self?.model.lock.lockIfEnabled() }
         notch = NotchController(model: model, settings: settings)
         floating = FloatingController(model: model, settings: settings)
         floating.onVisibilityChange = { [weak self] visible in self?.notch.floatingHidden = !visible }

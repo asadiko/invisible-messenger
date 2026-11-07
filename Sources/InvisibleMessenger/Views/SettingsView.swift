@@ -302,9 +302,3 @@ struct SettingsSection<Content: View>: View {
         }
     }
 }
-
-/// Placeholder until the app lock is added.
-struct LockSettingsSection: View {
-    let model: AppModel
-    var body: some View { EmptyView() }
-}
