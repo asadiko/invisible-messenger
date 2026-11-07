@@ -34,6 +34,10 @@ struct ChatScreen: View {
     let model: AppModel
     var chrome: ChatChrome
     @State private var composerHeight = Composer.minHeight
+    @State private var width: CGFloat = 660
+
+    /// Narrow windows (the floating mini window) always use tabs; the side list would leave no room to chat.
+    private var layout: ChatLayout { width < 460 ? .tabs : model.settings.layout }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -42,7 +46,7 @@ struct ChatScreen: View {
             Rectangle().fill(Theme.separator).frame(height: 1)
             if model.contacts.isEmpty {
                 emptyState
-            } else if model.settings.layout == .sidebar {
+            } else if layout == .sidebar {
                 HStack(spacing: 0) {
                     ContactList(model: model)
                     Rectangle().fill(Theme.separator).frame(width: 1)
@@ -53,11 +57,12 @@ struct ChatScreen: View {
             }
         }
         .background(Theme.background)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            if model.settings.layout == .tabs && !model.contacts.isEmpty {
+            if layout == .tabs && !model.contacts.isEmpty {
                 ContactTabs(model: model)
             } else if let contact = model.selectedContact {
                 Text(contact.name)
