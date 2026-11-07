@@ -194,10 +194,12 @@ final class NotchController {
         withObservationTracking {
             _ = model.totalUnread
             _ = model.isLocked
+            _ = settings.panelSize
         } onChange: { [weak self] in
             DispatchQueue.main.async {
                 guard let self else { return }
                 if self.state.phase == .closed { self.applyFrame(animated: false) }
+                if self.state.phase == .open, self.liveSize == nil { self.applyFrame(animated: true) }
                 self.refreshVisibility()
                 self.observeModel()
             }

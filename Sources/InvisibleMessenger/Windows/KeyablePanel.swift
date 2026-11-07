@@ -14,6 +14,18 @@ final class KeyablePanel: NSPanel {
     }
 
     override var canBecomeKey: Bool { acceptsKey }
+
+    /// Text fields in this panel edit through a field editor without a right-click menu or spelling popups.
+    private lazy var plainFieldEditor: NSTextView = {
+        let editor = PlainFieldEditor()
+        editor.isFieldEditor = true
+        return editor
+    }()
+
+    override func fieldEditor(_ createFlag: Bool, for object: Any?) -> NSText? {
+        if object is NSSecureTextField { return super.fieldEditor(createFlag, for: object) }
+        return plainFieldEditor
+    }
     override var canBecomeMain: Bool { false }
 
     override func cancelOperation(_ sender: Any?) {
@@ -53,5 +65,20 @@ final class KeyablePanel: NSPanel {
         }
         if let action, NSApp.sendAction(action, to: nil, from: self) { return true }
         return super.performKeyEquivalent(with: event)
+    }
+}
+
+/// Field editor with no context menu (menus are separate windows that could show up in a screen share).
+final class PlainFieldEditor: NSTextView {
+    override func menu(for event: NSEvent) -> NSMenu? { nil }
+
+    override var isContinuousSpellCheckingEnabled: Bool {
+        get { false }
+        set {}
+    }
+
+    override var isAutomaticSpellingCorrectionEnabled: Bool {
+        get { false }
+        set {}
     }
 }

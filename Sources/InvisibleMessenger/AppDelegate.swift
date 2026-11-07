@@ -24,8 +24,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if ProcessInfo.processInfo.environment["IM_OPEN_ON_LAUNCH"] == "1" {
             settings.appearance == .notch ? notch.openPinned() : floating.show(focus: false)
         }
+        runDebugAutomation()
         #endif
     }
+
+    #if DEBUG
+    /// Development aid for driving two copies of the app without touching the mouse or keyboard:
+    /// IM_DEBUG_PAIR=host (writes the code to IM_DEBUG_PAIR_FILE) or join:<code>,
+    /// IM_DEBUG_AUTOCONFIRM=1 (answers "They match" after 2 s), IM_DEBUG_SEND=<text> (sends once online).
+    private var debugTimer: Timer?
+
+    private func runDebugAutomation() {
+        let env = ProcessInfo.processInfo.environment
+        if let pair = env["IM_DEBUG_PAIR"] {
+            model.screen = .pairing
+            if pair == "host" {
+                model.startHosting()
+                if case .showingCode(let code, _)? = model.pairingState, let file = env["IM_DEBUG_PAIR_FILE"] {
+                    try? code.write(toFile: file, atomically: true, encoding: .utf8)
+                }
+            } else if pair.hasPrefix("join:") {
+                model.join(code: String(pair.dropFirst(5)))
+            }
+        }
+        var confirmAt: Date?
+        var sent = false
+        debugTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let model = self.model else { return }
+                if env["IM_DEBUG_AUTOCONFIRM"] == "1", case .verify? = model.pairingState {
+                    if confirmAt == nil { confirmAt = Date().addingTimeInterval(2) }
+                    if let at = confirmAt, Date() >= at { model.pairing?.confirm(true); confirmAt = nil }
+                }
+                if let text = env["IM_DEBUG_SEND"], !sent, let contact = model.contacts.first, model.isOnline(contact.id) {
+                    sent = true
+                    model.screen = .chat
+                    model.selectedContactID = contact.id
+                    model.send(text: text)
+                }
+            }
+        }
+    }
+    #endif
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showChat()
