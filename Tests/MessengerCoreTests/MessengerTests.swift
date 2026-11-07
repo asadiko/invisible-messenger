@@ -164,4 +164,58 @@ func makePairedPair() async throws -> (Node, Node) {
         #expect(!b.messenger.online.contains(a.id))
         #expect((a.messenger.dialAttempts[b.id] ?? 0) <= 3)
     }
+
+    @Test func oversizedTextIsRejected() async throws {
+        let a = try Node("A"), b = try Node("B")
+        try pinEachOther(a, b)
+        #expect(throws: MessengerError.messageTooLarge) {
+            try a.messenger.sendText(String(repeating: "x", count: 1_100_000), to: b.id)
+        }
+        #expect(a.messages(with: b).isEmpty)
+        _ = try a.messenger.sendText(String(repeating: "y", count: 100_000), to: b.id)
+        #expect(a.messages(with: b).count == 1)
+    }
+
+    @Test func incomingFileNameIsSanitized() async throws {
+        let (a, b) = try await makePairedPair()
+        defer { a.messenger.stop(); b.messenger.stop() }
+        let sent = try a.messenger.sendData(Data("x".utf8), fileName: "../../Library/LaunchAgents/evil.plist", kind: .file, to: b.id)
+        try await waitUntil { a.store.message(sent.id, contact: b.id)?.status == .delivered }
+        guard case .attachment(let info) = b.messages(with: a).first?.body else { Issue.record("no attachment"); return }
+        #expect(info.fileName == "evil.plist")
+    }
+
+    @Test func staleSessionIsReplacedByFreshOne() async throws {
+        let (a, b) = try await makePairedPair()
+        defer { a.messenger.stop(); b.messenger.stop() }
+        a.messenger.duplicateWindow = 1
+        b.messenger.duplicateWindow = 1
+        try await Task.sleep(for: .seconds(1.5))
+        // The Mac with the larger ID "restarts": it forgets its session while the socket stays half-open.
+        let (larger, smaller) = a.id > b.id ? (a, b) : (b, a)
+        larger.messenger.abandonSession(smaller.id)
+        try await waitUntil(4) { larger.messenger.online.contains(smaller.id) }
+        let sent = try larger.messenger.sendText("back", to: smaller.id)
+        try await waitUntil(4) { larger.store.message(sent.id, contact: smaller.id)?.status == .delivered }
+    }
+
+    @Test func backoffResetsWhenPeerReappears() async throws {
+        let a = try Node("A"), b = try Node("B")
+        try pinEachOther(a, b)
+        a.messenger.dialGrace = 0
+        try await a.start()
+        try await b.start()
+        defer { a.messenger.stop(); b.messenger.stop() }
+        let staleEntry = b.entry
+        b.messenger.stop()
+        a.directory.peers = [staleEntry]
+        // Dials to the vanished address fail until A is in a backoff longer than the 3 s we allow below.
+        try await waitUntil(30) { (a.messenger.backoffRemaining(for: b.id) ?? 0) > 3 }
+        try await b.start()
+        // Only A can see B, so only A's dialing can reconnect them.
+        a.directory.peers = []
+        a.directory.peers = [b.entry]
+        try await waitUntil(3) { a.messenger.online.contains(b.id) }
+    }
 }
+

@@ -133,4 +133,30 @@ func loopback(_ listener: PeerListener) -> NWEndpoint {
         directory.peers = [peer]
         #expect(seen.last == [peer])
     }
+
+    @Test func oversizedFrameIsRefusedAndConnectionSurvives() async throws {
+        let a = DeviceIdentity.generate(), b = DeviceIdentity.generate()
+        let aKey = a.publicKeyData, aID = a.deviceID
+        let listener = try await readyListener()
+        defer { listener.stop() }
+        var serverSession: SecureSession?
+        var serverGot: [WireMessage] = []
+        listener.onConnection = { conn, _, first in
+            SecureSession.respond(over: conn, firstMessage: first, identity: b, lookup: { $0 == aID ? aKey : nil }) { result in
+                serverSession = try? result.get()
+                serverSession?.onMessage = { serverGot.append($0) }
+            }
+        }
+        var clientSession: SecureSession?
+        SecureSession.initiate(over: FramedConnection(endpoint: loopback(listener)), identity: a, peerPublicKey: b.publicKeyData) {
+            clientSession = try? $0.get()
+        }
+        try await waitUntil { clientSession != nil && serverSession != nil }
+        let refused = clientSession?.send(.attachmentChunk(id: UUID(), index: 0, data: Data(count: 2_000_000)))
+        #expect(refused == false)
+        clientSession?.send(.ping)
+        try await waitUntil { serverGot == [.ping] }
+        clientSession?.close()
+    }
 }
+

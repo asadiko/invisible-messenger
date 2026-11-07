@@ -7,6 +7,8 @@ final class ImageViewerController {
     static let shared = ImageViewerController()
     private var panel: KeyablePanel?
 
+    var isOpen: Bool { panel?.isVisible ?? false }
+
     func show(image: NSImage, message: ChatMessage, model: AppModel) {
         close()
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)

@@ -116,12 +116,18 @@ public final class SecureSession {
             }
     }
 
-    public func send(_ message: WireMessage, completion: (@MainActor @Sendable () -> Void)? = nil) {
-        guard !closed else { return }
+    /// Returns false (and sends nothing) if the session is closed or the message would not fit in one frame.
+    @discardableResult
+    public func send(_ message: WireMessage, completion: (@MainActor @Sendable () -> Void)? = nil) -> Bool {
+        guard !closed, let plain = try? message.encoded() else { return false }
+        // Check before sealing: sealing advances the nonce counter, so a refused frame must never be sealed.
+        guard plain.count + 16 <= Framing.maxFrameLength else { return false }
         do {
-            connection.send(try channel.seal(message.encoded()), completion: completion)
+            connection.send(try channel.seal(plain), completion: completion)
+            return true
         } catch {
             close()
+            return false
         }
     }
 

@@ -12,6 +12,7 @@ public enum MessengerEvent: Sendable {
 }
 
 public enum MessengerError: Error, Equatable, Sendable {
+    case messageTooLarge
     case attachmentTooLarge
     case unreadableFile
     case unknownContact
@@ -75,6 +76,12 @@ public final class Messenger {
 
     /// How long the Mac with the larger ID waits before dialing a peer it can see.
     var dialGrace: TimeInterval = 3
+    /// Two sessions with the same peer started within this window are a simultaneous dial (tie-break);
+    /// a newer session arriving later means the peer lost the old one, so it replaces it.
+    var duplicateWindow: TimeInterval = 5
+    private var sessionStarted: [DeviceID: Date] = [:]
+    private var lastEndpoint: [DeviceID: NWEndpoint] = [:]
+    private var abandonedForTesting: [SecureSession] = []
     var dialAttempts: [DeviceID: Int] = [:]
     private(set) var sessions: [DeviceID: SecureSession] = [:]
 
@@ -145,6 +152,8 @@ public final class Messenger {
     public func sendText(_ text: String, to contact: DeviceID) throws -> ChatMessage {
         guard store.contact(contact) != nil else { throw MessengerError.unknownContact }
         let message = ChatMessage(contactID: contact, direction: .outgoing, body: .text(text), status: .sending)
+        let wire = try WireMessage.text(id: message.id, sentAt: message.sentAt, body: text).encoded()
+        guard wire.count + 16 <= Framing.maxFrameLength else { throw MessengerError.messageTooLarge }
         try store.append(message)
         emit(.messageAdded(message))
         if let session = sessions[contact] { transmit(message, over: session) }
@@ -236,9 +245,15 @@ public final class Messenger {
         for peer in discovered {
             let id = DeviceID(rawValue: peer.name)
             if firstSeen[id] == nil { firstSeen[id] = now }
+            // A peer that (re)appears or moved to a new address gets a fresh try, not the old backoff.
+            if lastEndpoint[id] != peer.endpoint {
+                lastEndpoint[id] = peer.endpoint
+                backoff[id] = nil
+            }
         }
         for id in firstSeen.keys where !names.contains(id.rawValue) {
             firstSeen[id] = nil
+            lastEndpoint[id] = nil
         }
         tick()
     }
@@ -281,6 +296,11 @@ public final class Messenger {
         }
     }
 
+    /// Seconds until the next dial to `id` is allowed, if it is currently backed off.
+    func backoffRemaining(for id: DeviceID) -> TimeInterval? {
+        backoff[id].map { max(0, $0.next.timeIntervalSinceNow) }
+    }
+
     private func bumpBackoff(_ id: DeviceID) {
         let delay = min((backoff[id]?.delay ?? 1) * 2, 60)
         backoff[id] = Backoff(delay: delay, next: Date().addingTimeInterval(delay))
@@ -306,9 +326,13 @@ public final class Messenger {
         let id = session.peerID
         guard store.contact(id) != nil else { session.close(); return }
         if let existing = sessions[id] {
-            // Both sides keep the session started by the Mac with the smaller ID.
-            let keepNew = session.isInitiator == (myID < id)
-            guard keepNew else { session.close(); return }
+            let age = Date().timeIntervalSince(sessionStarted[id] ?? .distantPast)
+            if age < duplicateWindow {
+                // Simultaneous dial: both sides keep the session started by the Mac with the smaller ID.
+                let keepNew = session.isInitiator == (myID < id)
+                guard keepNew else { session.close(); return }
+            }
+            // Otherwise the peer dialed because it lost the old session (sleep, restart): the new one wins.
             existing.onClose = nil
             existing.close()
             dropTransfers(of: existing)
@@ -320,6 +344,7 @@ public final class Messenger {
         let id = session.peerID
         let wasOnline = online.contains(id)
         sessions[id] = session
+        sessionStarted[id] = Date()
         online.insert(id)
         lastHeard[id] = Date()
         session.onMessage = { [weak self, weak session] message in
@@ -332,6 +357,17 @@ public final class Messenger {
         }
         if !wasOnline { emit(.presenceChanged(id, online: true)) }
         flushOutbox(id, over: session)
+    }
+
+    /// Test hook: forget a session without closing its socket, as if this Mac had restarted
+    /// while the peer still holds a half-open connection.
+    func abandonSession(_ id: DeviceID) {
+        guard let session = sessions.removeValue(forKey: id) else { return }
+        session.onClose = nil
+        session.onMessage = nil
+        abandonedForTesting.append(session)
+        online.remove(id)
+        emit(.presenceChanged(id, online: false))
     }
 
     private func sessionClosed(_ session: SecureSession) {
@@ -424,7 +460,9 @@ public final class Messenger {
             receive(chat)
             send(.ack(id: messageID), over: session)
 
-        case let .attachmentStart(messageID, sentAt, info):
+        case let .attachmentStart(messageID, sentAt, rawInfo):
+            var info = rawInfo
+            info.fileName = AttachmentInfo.safeFileName(rawInfo.fileName)
             if store.message(messageID, contact: id) != nil {
                 incoming[messageID] = nil
                 return

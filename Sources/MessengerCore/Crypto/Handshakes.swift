@@ -42,11 +42,15 @@ struct PairHello: HandshakeMessage {
     var v: Int
     var eph: Data
     var nonce: Data
+    /// Host only: SHA-256(revealNonce ‖ host public key), revealed in its last message.
+    var commit: Data
 }
 
 struct PairIdentity: HandshakeMessage {
     var publicKey: Data
     var name: String
+    /// Fresh randomness mixed into the emoji (committed to by the host before the joiner reveals its own).
+    var nonce: Data
 }
 
 struct SealedPayload: HandshakeMessage {
@@ -93,7 +97,7 @@ private func dh(_ priv: Curve25519.KeyAgreement.PrivateKey, _ pub: Data) throws 
     return bytes(try priv.sharedSecretFromKeyAgreement(with: key))
 }
 
-private func sealOnce(_ plaintext: Data, key: Data) throws -> Data {
+func sealOnce(_ plaintext: Data, key: Data) throws -> Data {
     let box = try ChaChaPoly.seal(plaintext, using: SymmetricKey(data: key), nonce: zeroNonce)
     return box.ciphertext + box.tag
 }
@@ -128,9 +132,11 @@ public struct PairingResult: Sendable {
 
 /// Code-authenticated key exchange used once to introduce two Macs.
 ///
-/// J→H hello · H→J hello · J→H sealed identity · H→J sealed identity.
+/// J→H hello · H→J hello + commitment · J→H sealed identity + nonce · H→J sealed identity + revealed nonce.
 /// Keys mix an ephemeral X25519 secret with the PBKDF2-stretched code, so only someone who knows the
-/// code can complete it, and a wrong guess can't be checked offline cheaply.
+/// code can complete it, and a wrong guess can't be checked offline cheaply. The host commits to its key
+/// and nonce before the joiner reveals its nonce, so even someone who knows the code can't search for
+/// keys that make the emoji match on both sides of a relay.
 public final class PairingHandshake: HandshakeMachine {
     public enum Role: Sendable { case host, joiner }
 
@@ -144,7 +150,12 @@ public final class PairingHandshake: HandshakeMachine {
     private let nonce = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
     private var state = State.initial
     private var firstMessage = Data()
-    private var keyJH = Data(), keyHJ = Data(), keySAS = Data(), okm = Data()
+    private var keyJH = Data(), keySAS = Data(), okm = Data()
+    private(set) var keyHJ = Data()
+    /// Host: the random value committed to in its hello and revealed with its identity.
+    let revealNonce = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
+    private var hostCommit = Data()
+    private var joinerNonce = Data()
 
     public private(set) var result: PairingResult?
     /// True once the joiner has sent its sealed identity (a hang-up after this means the host rejected the code).
@@ -161,7 +172,7 @@ public final class PairingHandshake: HandshakeMachine {
         guard state == .initial else { return nil }
         state = .awaitingHello
         guard role == .joiner else { return nil }
-        firstMessage = try! PairHello(v: protocolVersion, eph: eph.publicKey.rawRepresentation, nonce: nonce).encoded()
+        firstMessage = try! PairHello(v: protocolVersion, eph: eph.publicKey.rawRepresentation, nonce: nonce, commit: Data()).encoded()
         return firstMessage
     }
 
@@ -171,7 +182,8 @@ public final class PairingHandshake: HandshakeMachine {
         case (.host, .awaitingHello):
             let hello = try PairHello.decode(message)
             try checkVersion(hello.v)
-            let reply = try PairHello(v: protocolVersion, eph: eph.publicKey.rawRepresentation, nonce: nonce).encoded()
+            let commit = sha256(revealNonce + identity.publicKeyData)
+            let reply = try PairHello(v: protocolVersion, eph: eph.publicKey.rawRepresentation, nonce: nonce, commit: commit).encoded()
             try deriveKeys(peerEph: hello.eph, nonceJ: hello.nonce, nonceH: nonce, transcript: message + reply)
             state = .awaitingIdentity
             return reply
@@ -179,20 +191,25 @@ public final class PairingHandshake: HandshakeMachine {
         case (.joiner, .awaitingHello):
             let hello = try PairHello.decode(message)
             try checkVersion(hello.v)
+            guard hello.commit.count == 32 else { throw HandshakeError.malformed }
+            hostCommit = hello.commit
             try deriveKeys(peerEph: hello.eph, nonceJ: nonce, nonceH: hello.nonce, transcript: firstMessage + message)
             state = .awaitingIdentity
             sentIdentity = true
-            return try sealedIdentity(key: keyJH)
+            joinerNonce = nonce
+            return try sealedIdentity(key: keyJH, nonce: nonce)
 
         case (.host, .awaitingIdentity):
             let peer = try openIdentity(message, key: keyJH)
-            let reply = try sealedIdentity(key: keyHJ)
-            finish(peer: peer, joinerKey: peer.publicKey, hostKey: identity.publicKeyData)
+            joinerNonce = peer.nonce
+            let reply = try sealedIdentity(key: keyHJ, nonce: revealNonce)
+            finish(peer: peer, joinerKey: peer.publicKey, hostKey: identity.publicKeyData, hostNonce: revealNonce)
             return reply
 
         case (.joiner, .awaitingIdentity):
             let peer = try openIdentity(message, key: keyHJ)
-            finish(peer: peer, joinerKey: identity.publicKeyData, hostKey: peer.publicKey)
+            guard sha256(peer.nonce + peer.publicKey) == hostCommit else { throw HandshakeError.authenticationFailed }
+            finish(peer: peer, joinerKey: identity.publicKeyData, hostKey: peer.publicKey, hostNonce: peer.nonce)
             return nil
 
         default:
@@ -209,20 +226,20 @@ public final class PairingHandshake: HandshakeMachine {
         keySAS = okm.suffix(32)
     }
 
-    private func sealedIdentity(key: Data) throws -> Data {
-        let plain = try PairIdentity(publicKey: identity.publicKeyData, name: displayName).encoded()
+    private func sealedIdentity(key: Data, nonce: Data) throws -> Data {
+        let plain = try PairIdentity(publicKey: identity.publicKeyData, name: displayName, nonce: nonce).encoded()
         return try SealedPayload(box: sealOnce(plain, key: key)).encoded()
     }
 
     private func openIdentity(_ message: Data, key: Data) throws -> PairIdentity {
         let sealed = try SealedPayload.decode(message)
         let peer = try PairIdentity.decode(try openOnce(sealed.box, key: key))
-        guard peer.publicKey.count == 32 else { throw HandshakeError.malformed }
+        guard peer.publicKey.count == 32, peer.nonce.count == 16 else { throw HandshakeError.malformed }
         return peer
     }
 
-    private func finish(peer: PairIdentity, joinerKey: Data, hostKey: Data) {
-        let emoji = EmojiFingerprint.emojis(for: sha256(keySAS + joinerKey + hostKey))
+    private func finish(peer: PairIdentity, joinerKey: Data, hostKey: Data, hostNonce: Data) {
+        let emoji = EmojiFingerprint.emojis(for: sha256(keySAS + joinerKey + hostKey + joinerNonce + hostNonce))
         result = PairingResult(
             peerID: DeviceIdentity.deviceID(for: peer.publicKey),
             peerName: String(peer.name.prefix(64)),

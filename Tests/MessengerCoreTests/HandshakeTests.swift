@@ -102,4 +102,19 @@ func exchange(_ first: HandshakeMachine, _ second: HandshakeMachine) throws {
         let m2 = try #require(try r.receive(m1))
         #expect(throws: HandshakeError.authenticationFailed) { try i.receive(m2) }
     }
+
+    @Test func joinerRejectsHostKeyThatDoesNotMatchCommitment() throws {
+        let joiner = PairingHandshake(role: .joiner, code: code, identity: .generate(), displayName: "Bob")
+        let host = PairingHandshake(role: .host, code: code, identity: .generate(), displayName: "Alice")
+        let m1 = try #require(joiner.start())
+        let m2 = try #require(try host.receive(m1))
+        let m3 = try #require(try joiner.receive(m2))
+        _ = try host.receive(m3)
+        // A host who knows the code but swaps in a different identity key after committing.
+        let swapped = PairIdentity(publicKey: DeviceIdentity.generate().publicKeyData, name: "Alice", nonce: host.revealNonce)
+        let forged = try SealedPayload(box: sealOnce(swapped.encoded(), key: host.keyHJ)).encoded()
+        #expect(throws: HandshakeError.authenticationFailed) { try joiner.receive(forged) }
+        #expect(joiner.result == nil)
+    }
 }
+

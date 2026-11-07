@@ -46,7 +46,13 @@ final class AppModel {
     var messages: [ChatMessage] = []
     var online: Set<DeviceID> = []
     var progress: [UUID: Double] = [:]
-    var isLocked = false { didSet { markReadIfVisible() } }
+    var isLocked = false {
+        didSet {
+            // Nothing of the chat may stay on screen once locked.
+            if isLocked { ImageViewerController.shared.close() }
+            markReadIfVisible()
+        }
+    }
     /// Set by the window controllers: true while the chat is on screen.
     var chatVisible = false { didSet { markReadIfVisible() } }
     var screen: PanelScreen = .chat
@@ -107,9 +113,15 @@ final class AppModel {
             let aside = dataDirectory.deletingLastPathComponent()
                 .appendingPathComponent("\(dataDirectory.lastPathComponent).unreadable-\(Int(Date().timeIntervalSince1970))")
             try? FileManager.default.moveItem(at: dataDirectory, to: aside)
-            // A brand-new folder with a fresh key always opens.
-            store = try! ChatStore(directory: dataDirectory, sealer: DataSealer(key: key))
-            notice = "Old chats couldn't be opened, so they were set aside and you're starting fresh."
+            if let fresh = try? ChatStore(directory: dataDirectory, sealer: DataSealer(key: key)) {
+                store = fresh
+                notice = "Old chats couldn't be opened, so they were set aside and you're starting fresh."
+            } else {
+                // The folder couldn't even be moved: run from a temporary folder rather than crash.
+                let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("InvisibleMessenger-\(UUID().uuidString)")
+                store = try! ChatStore(directory: temporary, sealer: DataSealer(key: key))
+                notice = "Your chats folder couldn't be opened, so chats won't be kept after you quit."
+            }
         }
         let model = AppModel(profile: profile, settings: settings, secrets: secrets, identity: identity, store: store)
         model.seedDemoIfRequested()
@@ -178,8 +190,13 @@ final class AppModel {
     func send(text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let id = selectedContactID else { return }
+        let body = text.trimmingCharacters(in: .newlines)
         do {
-            try messenger.sendText(text.trimmingCharacters(in: .newlines), to: id)
+            try messenger.sendText(body, to: id)
+        } catch MessengerError.messageTooLarge {
+            // Very long pastes (logs, dumps) go as a text file instead.
+            attach([AttachmentDraft(data: Data(body.utf8), url: nil, fileName: "Pasted text.txt", kind: .file)])
+            showNotice("That text was long, so it was sent as a file.")
         } catch {
             showNotice("Couldn't send the message.")
         }
@@ -213,16 +230,22 @@ final class AppModel {
     /// Writes an attachment to the save folder without any dialog, never overwriting an existing file.
     @discardableResult
     func save(_ message: ChatMessage) -> URL? {
-        guard case .attachment(let info) = message.body, let data = attachmentData(message) else { return nil }
-        let folder = settings.saveFolder
-        let base = (info.fileName as NSString).deletingPathExtension
-        let ext = (info.fileName as NSString).pathExtension
-        var url = folder.appendingPathComponent(info.fileName)
+        guard case .attachment(let info) = message.body else { return nil }
+        guard let data = attachmentData(message) else {
+            showNotice("That file isn't available on this Mac.")
+            return nil
+        }
+        let folder = settings.saveFolder.standardizedFileURL
+        let name = AttachmentInfo.safeFileName(info.fileName)
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var url = folder.appendingPathComponent(name)
         var n = 2
         while FileManager.default.fileExists(atPath: url.path) {
             url = folder.appendingPathComponent(ext.isEmpty ? "\(base) (\(n))" : "\(base) (\(n)).\(ext)")
             n += 1
         }
+        guard url.deletingLastPathComponent().standardizedFileURL.path == folder.path else { return nil }
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             try data.write(to: url)

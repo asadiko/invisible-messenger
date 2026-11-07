@@ -41,6 +41,16 @@ public struct AttachmentInfo: Codable, Hashable, Sendable {
         self.byteCount = byteCount
         self.sha256 = sha256
     }
+
+    /// A file name that is safe to create inside a folder: no path parts, no ':' and no leading dots.
+    /// Peers choose attachment names, so they must never be able to point outside the save folder.
+    public static func safeFileName(_ raw: String) -> String {
+        let last = raw.split(separator: "/", omittingEmptySubsequences: true).last.map(String.init) ?? ""
+        var name = last.replacingOccurrences(of: ":", with: "_").replacingOccurrences(of: "\0", with: "")
+        while name.hasPrefix(".") { name.removeFirst() }
+        name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "file" : String(name.prefix(200))
+    }
 }
 
 public enum MessageBody: Codable, Hashable, Sendable {

@@ -134,7 +134,7 @@ struct LockSettingsSection: View {
                         Text("1 hour").tag(60)
                         Text("Never").tag(0)
                     }
-                    .labelsHidden().frame(width: 110)
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 230)
                 }
                 if settings.lockType == .password && !settingPassword {
                     Button("Change password") { settingPassword = true }

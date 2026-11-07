@@ -70,7 +70,7 @@ There is no Dock icon and no menu bar icon. That's on purpose, so nothing on a s
   - It is stretched with PBKDF2 and mixed into an X25519 key exchange, so only someone who knows it can finish pairing.
   - A wrong guess can't be checked offline cheaply.
   - After three wrong tries the code is thrown away.
-  - The four emoji are derived from both Macs' keys, so a "man in the middle" shows up as different emoji.
+  - The four emoji come from both Macs' keys plus fresh random values. The Mac showing the code commits to its values before seeing the other Mac's, so a "man in the middle", even one who knows the code, can't make the emoji match. It shows up as different emoji.
 - **Conversations:**
   - Every connection starts with a handshake that combines fresh ephemeral keys with the identity keys pinned during pairing. This gives mutual authentication and forward secrecy.
   - Messages are encrypted with ChaCha20-Poly1305.
@@ -102,6 +102,10 @@ All 4 windows are hidden from screen capture.
 - the first-launch **Local Network** and **Keychain** prompts
 - the **Emoji & Symbols** picker
 - input-method candidate windows
+- menus and previews opened from inside the file picker
+- the "Background Items Added" notice when you turn on **Open at login**
+
+Very long pasted text is sent as a `Pasted text.txt` file. File names from the other Mac are cleaned, so **Save** always writes inside your save folder.
 
 A camera pointed at your screen sees everything, of course. Before relying on it in an important meeting, do a quick test share with a friend.
 
