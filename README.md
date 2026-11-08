@@ -117,7 +117,7 @@ A camera pointed at your screen sees everything, of course. Before relying on it
 swift test                       # core (crypto, protocol, storage, networking, pairing) and app model tests
 scripts/build-app.sh --debug     # debug build
 scripts/run-pair-demo.sh         # two separate copies ("alice" and "bob") to try pairing on one Mac
-scripts/make-icon.sh             # redraw Resources/AppIcon.icns (designs: notch, eye, ghost, glass)
+scripts/make-icon.sh             # redraw Resources/AppIcon.icns (designs: ghost, notch, eye, glass)
 ```
 
 The app icon is drawn in code (`scripts/make-icon.swift`). The other designs are in [docs/images/icon-options.png](docs/images/icon-options.png); `scripts/make-icon.sh eye`, for example, switches to one of them.

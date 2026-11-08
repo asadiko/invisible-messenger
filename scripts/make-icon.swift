@@ -1,6 +1,6 @@
 // Draws the Invisible Messenger app icon with SwiftUI.
 //
-//   scripts/make-icon.sh [variant]            → Resources/AppIcon.icns (default variant: notch)
+//   scripts/make-icon.sh [variant]            → Resources/AppIcon.icns (default variant: ghost)
 //   build/make-icon png <variant> <out.png>   → one 1024×1024 PNG
 //   build/make-icon sheet <out.png>           → all variants side by side at several sizes
 //
