@@ -30,7 +30,7 @@ struct ContactList: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Button { model.screen = .pairing } label: {
+                Button { model.openPairing() } label: {
                     Label("Add", systemImage: "plus")
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.accent)
@@ -68,7 +68,7 @@ struct ContactTabs: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Button { model.screen = .pairing } label: {
+                Button { model.openPairing() } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.accent)

@@ -9,6 +9,12 @@ enum PanelScreen: Equatable {
     case chat, pairing, settings
 }
 
+/// The two halves of the Add contact screen.
+enum PairingTab: String, CaseIterable {
+    case show = "Show my code"
+    case enter = "Enter code"
+}
+
 /// Something the user is about to send: pasted/dropped data or a file on disk.
 struct AttachmentDraft {
     var data: Data?
@@ -58,6 +64,8 @@ final class AppModel {
     var screen: PanelScreen = .chat
     var pairing: PairingSession?
     var pairingState: PairingSession.State?
+    /// Shared by every window showing the chat, so they always agree on the tab.
+    var pairingTab: PairingTab = .show
     /// A short inline message ("Saved to Downloads", errors), cleared after a few seconds.
     var notice: String?
     var lastIncomingFrom: DeviceID?
@@ -268,6 +276,35 @@ final class AppModel {
     }
 
     // MARK: Pairing
+    //
+    // Pairing only starts from these explicit actions, never from a view appearing: the chat UI
+    // exists in more than one window (notch panel and floating window), and a hidden copy
+    // appearing must not start or replace a code.
+
+    /// Opens Add contact on the "Show my code" tab with a fresh code.
+    func openPairing() {
+        screen = .pairing
+        pairingTab = .show
+        cancelPairing()
+        startHosting()
+    }
+
+    func selectPairingTab(_ tab: PairingTab) {
+        pairingTab = tab
+        cancelPairing()
+        if tab == .show { startHosting() }
+    }
+
+    /// Starts over on the current tab (after a failure or a cancel).
+    func retryPairing() {
+        cancelPairing()
+        if pairingTab == .show { startHosting() }
+    }
+
+    func closePairing() {
+        cancelPairing()
+        screen = .chat
+    }
 
     func startHosting() {
         track(messenger.startHostingPairing())

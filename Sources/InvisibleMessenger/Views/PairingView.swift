@@ -6,19 +6,12 @@ struct PairingView: View {
     let model: AppModel
     var chrome: ChatChrome
 
-    private enum Tab: String, CaseIterable {
-        case show = "Show my code"
-        case enter = "Enter code"
-    }
-
-    @State private var tab: Tab = .show
     @State private var typed = ""
 
     var body: some View {
         VStack(spacing: 0) {
             ScreenHeader(title: "Add a contact", chrome: chrome) {
-                model.cancelPairing()
-                model.screen = .chat
+                model.closePairing()
             }
             .padding(.top, chrome.topInset)
             Rectangle().fill(Theme.separator).frame(height: 1)
@@ -42,8 +35,7 @@ struct PairingView: View {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 36)).foregroundStyle(Theme.online)
                 Text("\(contact.name) added").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.textPrimary)
                 Button("Start chatting") {
-                    model.cancelPairing()
-                    model.screen = .chat
+                    model.closePairing()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
@@ -56,39 +48,39 @@ struct PairingView: View {
                     .foregroundStyle(Theme.textPrimary)
                     .multilineTextAlignment(.center)
                 Button("Try again") {
-                    model.cancelPairing()
-                    if tab == .show { model.startHosting() }
+                    model.retryPairing()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
             }
-        case .showingCode(let code, let expiresAt)?:
+        case .showingCode(let code, let expiresAt)? where model.pairingTab == .show:
             VStack(spacing: 16) {
                 tabs
                 showCode(code: code, expiresAt: expiresAt)
                 Spacer(minLength: 0)
             }
-        case nil:
+        default:
             VStack(spacing: 16) {
                 tabs
-                if tab == .enter { enterCode } else { ProgressView().controlSize(.small) }
+                if model.pairingTab == .enter {
+                    enterCode
+                } else {
+                    Button("Show a code") { model.retryPairing() }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.accent)
+                }
                 Spacer(minLength: 0)
             }
-            .onAppear { if tab == .show { model.startHosting() } }
         }
     }
 
     private var tabs: some View {
-        Picker("", selection: $tab) {
-            ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        Picker("", selection: Binding(get: { model.pairingTab }, set: { model.selectPairingTab($0) })) {
+            ForEach(PairingTab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
         .frame(maxWidth: 280)
-        .onChange(of: tab) { _, newTab in
-            model.cancelPairing()
-            if newTab == .show { model.startHosting() }
-        }
     }
 
     private func showCode(code: String, expiresAt: Date) -> some View {

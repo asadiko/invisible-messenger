@@ -47,13 +47,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func runDebugAutomation() {
         let env = ProcessInfo.processInfo.environment
         if let pair = env["IM_DEBUG_PAIR"] {
-            model.screen = .pairing
             if pair == "host" {
-                model.startHosting()
+                model.openPairing()
                 if case .showingCode(let code, _)? = model.pairingState, let file = env["IM_DEBUG_PAIR_FILE"] {
                     try? code.write(toFile: file, atomically: true, encoding: .utf8)
                 }
             } else if pair.hasPrefix("join:") {
+                model.screen = .pairing
+                model.selectPairingTab(.enter)
                 model.join(code: String(pair.dropFirst(5)))
             }
         }

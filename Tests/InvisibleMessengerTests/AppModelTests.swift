@@ -1,6 +1,7 @@
 import AppKit
 import CryptoKit
 import Foundation
+import SwiftUI
 import Testing
 @testable import InvisibleMessenger
 @testable import MessengerCore
@@ -97,6 +98,67 @@ import Testing
         #expect(ImageViewerController.shared.isOpen)
         model.isLocked = true
         #expect(!ImageViewerController.shared.isOpen)
+    }
+
+    /// The chat UI exists twice (notch panel + hidden floating window). Merely drawing the pairing
+    /// screen in a hidden window must never start or replace a pairing.
+    @Test func hiddenPairingScreenDoesNotStartPairing() throws {
+        let (model, _) = try modelWithContact()
+        model.screen = .pairing
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 660, height: 520), styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = NSHostingView(rootView: PanelRoot(model: model, chrome: ChatChrome()))
+        window.contentView?.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        #expect(model.pairingState == nil)
+        #expect(!model.messenger.listener.pairingOpen)
+    }
+
+    func code(_ model: AppModel) -> String? {
+        if case .showingCode(let code, _)? = model.pairingState { return code }
+        return nil
+    }
+
+    @Test func openingAddContactShowsACode() throws {
+        let (model, _) = try modelWithContact()
+        model.openPairing()
+        #expect(model.screen == .pairing)
+        #expect(model.pairingTab == .show)
+        #expect(code(model) != nil)
+        #expect(model.messenger.listener.pairingOpen)
+    }
+
+    /// The reported bug: on "Enter code" a (different) code kept appearing.
+    @Test func enterCodeTabShowsNoCodeEvenWithTheHiddenWindowDrawn() throws {
+        let (model, _) = try modelWithContact()
+        let hidden = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 660, height: 520), styleMask: [.borderless], backing: .buffered, defer: false)
+        hidden.contentView = NSHostingView(rootView: PanelRoot(model: model, chrome: ChatChrome()))
+        model.openPairing()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        model.selectPairingTab(.enter)
+        hidden.contentView?.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        #expect(model.pairingTab == .enter)
+        #expect(model.pairingState == nil)
+        #expect(!model.messenger.listener.pairingOpen)
+    }
+
+    @Test func backToShowMakesAFreshCode() throws {
+        let (model, _) = try modelWithContact()
+        model.openPairing()
+        let first = code(model)
+        model.selectPairingTab(.enter)
+        model.selectPairingTab(.show)
+        #expect(code(model) != nil)
+        #expect(code(model) != first)
+    }
+
+    @Test func leavingPairingStopsHosting() throws {
+        let (model, _) = try modelWithContact()
+        model.openPairing()
+        model.closePairing()
+        #expect(model.screen == .chat)
+        #expect(model.pairingState == nil)
+        #expect(!model.messenger.listener.pairingOpen)
     }
 }
 

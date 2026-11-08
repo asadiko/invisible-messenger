@@ -141,7 +141,7 @@ struct ChatScreen: View {
             Text("Pair with another Mac on this Wi-Fi using a short code.")
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Button("Add contact") { model.screen = .pairing }
+            Button("Add contact") { model.openPairing() }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
         }
