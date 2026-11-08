@@ -27,6 +27,22 @@ struct MessageRow: View {
             if !outgoing { Spacer(minLength: 40) }
         }
         .onHover { hovering = $0 }
+        // The hover buttons only exist while the pointer is over the row; VoiceOver gets them as actions.
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Message: \(preview)")
+        .accessibilityActions {
+            if case .text(let text) = message.body {
+                Button("Copy message") { copyToPasteboard(text) }
+            }
+            Button("Delete message") { model.delete(message) }
+        }
+    }
+
+    private var preview: String {
+        switch message.body {
+        case .text(let text): text
+        case .attachment(let info): info.fileName
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -71,9 +87,9 @@ struct MessageRow: View {
     private var actions: some View {
         HStack(spacing: 0) {
             if case .text(let text) = message.body {
-                IconButton(systemName: "doc.on.doc") { copyToPasteboard(text) }
+                IconButton(systemName: "doc.on.doc", label: "Copy message") { copyToPasteboard(text) }
             }
-            IconButton(systemName: "trash") { model.delete(message) }
+            IconButton(systemName: "trash", label: "Delete message") { model.delete(message) }
         }
         .padding(.bottom, 14)
     }
@@ -164,6 +180,9 @@ struct ImageAttachmentView: View {
                     .frame(maxWidth: 220, maxHeight: 140)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .onTapGesture { ImageViewerController.shared.show(image: image, message: message, model: model) }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Open image \(info.fileName)")
+                    .accessibilityAction { ImageViewerController.shared.show(image: image, message: message, model: model) }
             } else {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Theme.surface)

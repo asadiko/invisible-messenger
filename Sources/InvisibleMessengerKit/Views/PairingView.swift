@@ -202,7 +202,7 @@ struct ScreenHeader: View {
             Spacer()
             HiddenBadge()
             if let onClose = chrome.onClose {
-                IconButton(systemName: "xmark", action: onClose)
+                IconButton(systemName: "xmark", label: "Close", action: onClose)
             }
         }
         .padding(.horizontal, 12)

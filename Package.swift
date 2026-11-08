@@ -12,9 +12,20 @@ let package = Package(
             name: "MessengerCore",
             linkerSettings: [.linkedFramework("Network")]
         ),
+        .target(
+            name: "InvisibleMessengerKit",
+            dependencies: ["MessengerCore"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
         .executableTarget(
             name: "InvisibleMessenger",
-            dependencies: ["MessengerCore"],
+            dependencies: ["InvisibleMessengerKit"],
+            swiftSettings: [.defaultIsolation(MainActor.self)]
+        ),
+        /// Drives the real UI (two copies of the app on loopback) through every flow: scripts/ui-tests.sh
+        .executableTarget(
+            name: "UIFlowRunner",
+            dependencies: ["InvisibleMessengerKit", "MessengerCore"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
         .testTarget(
@@ -23,7 +34,7 @@ let package = Package(
         ),
         .testTarget(
             name: "InvisibleMessengerTests",
-            dependencies: ["InvisibleMessenger", "MessengerCore"],
+            dependencies: ["InvisibleMessengerKit", "MessengerCore"],
             swiftSettings: [.defaultIsolation(MainActor.self)]
         ),
     ]

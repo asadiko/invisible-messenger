@@ -3,7 +3,7 @@ import CryptoKit
 import Foundation
 import SwiftUI
 import Testing
-@testable import InvisibleMessenger
+@testable import InvisibleMessengerKit
 @testable import MessengerCore
 
 @Suite struct AppModelTests {

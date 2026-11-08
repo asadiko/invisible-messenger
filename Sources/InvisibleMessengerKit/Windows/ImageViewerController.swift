@@ -52,7 +52,7 @@ private struct ImageViewer: View {
                 HiddenBadge()
                 Spacer()
                 Button("Save", action: onSave).buttonStyle(.plain).foregroundStyle(Theme.accent)
-                IconButton(systemName: "xmark", action: onClose)
+                IconButton(systemName: "xmark", label: "Close", action: onClose)
             }
             .padding(.horizontal, 12)
             .frame(height: 44)

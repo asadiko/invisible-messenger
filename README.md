@@ -105,6 +105,7 @@ All 4 windows are hidden from screen capture.
 - the **Emoji & Symbols** picker
 - input-method candidate windows
 - menus and previews opened from inside the file picker
+- the right-click menu of text fields such as the pairing code or your name (the message box has none)
 - the "Background Items Added" notice when you turn on **Open at login**
 
 Very long pasted text is sent as a `Pasted text.txt` file. File names from the other Mac are cleaned, so **Save** always writes inside your save folder.
@@ -115,6 +116,7 @@ A camera pointed at your screen sees everything, of course. Before relying on it
 
 ```bash
 swift test                       # core (crypto, protocol, storage, networking, pairing) and app model tests
+scripts/ui-tests.sh              # end-to-end: two copies of the app, every screen driven through its real buttons and fields
 scripts/build-app.sh --debug     # debug build
 scripts/run-pair-demo.sh         # two separate copies ("alice" and "bob") to try pairing on one Mac
 scripts/make-icon.sh             # redraw Resources/AppIcon.icns (designs: ghost, notch, eye, glass)
@@ -122,8 +124,10 @@ scripts/make-icon.sh             # redraw Resources/AppIcon.icns (designs: ghost
 
 The app icon is drawn in code (`scripts/make-icon.swift`). The other designs are in [docs/images/icon-options.png](docs/images/icon-options.png); `scripts/make-icon.sh eye`, for example, switches to one of them.
 
-`IM_PROFILE=<name>` gives a copy of the app its own data folder, Keychain items and preferences. The code is split in two:
+`IM_PROFILE=<name>` gives a copy of the app its own data folder, Keychain items and preferences. The code is split into:
 - `Sources/MessengerCore`: everything testable without a UI.
-- `Sources/InvisibleMessenger`: the AppKit/SwiftUI app.
+- `Sources/InvisibleMessengerKit`: the AppKit/SwiftUI app.
+- `Sources/InvisibleMessenger`: the app's entry point.
+- `Sources/UIFlowRunner`: the end-to-end UI test runner.
 
 The design is in `docs/specs/`.

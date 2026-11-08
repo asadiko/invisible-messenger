@@ -217,5 +217,21 @@ func makePairedPair() async throws -> (Node, Node) {
         a.directory.peers = [b.entry]
         try await waitUntil(3) { a.messenger.online.contains(b.id) }
     }
+
+    @Test func stoppedMessengerTakesNoNewSessions() async throws {
+        let a = try Node("A"), b = try Node("B")
+        try pinEachOther(a, b)
+        b.messenger.dialGrace = 0
+        try await a.start()
+        try await b.start()
+        defer { a.messenger.stop() }
+        // Only B can dial; its dial is still in flight when it stops.
+        b.directory.peers = [a.entry]
+        b.messenger.stop()
+        try await Task.sleep(for: .seconds(2))
+        #expect(b.messenger.sessions.isEmpty)
+        #expect(!b.messenger.online.contains(a.id))
+        #expect(!a.messenger.online.contains(b.id))
+    }
 }
 

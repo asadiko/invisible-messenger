@@ -14,7 +14,7 @@ struct LockView: View {
             HStack {
                 Spacer()
                 HiddenBadge()
-                if let onClose = chrome.onClose { IconButton(systemName: "xmark", action: onClose) }
+                if let onClose = chrome.onClose { IconButton(systemName: "xmark", label: "Close", action: onClose) }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

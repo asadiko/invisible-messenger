@@ -113,7 +113,7 @@ struct ChatScreen: View {
 
     private var composerBar: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            IconButton(systemName: "paperclip", tint: Theme.textSecondary) { pickFiles() }
+            IconButton(systemName: "paperclip", label: "Attach", tint: Theme.textSecondary) { pickFiles() }
             Composer(
                 placeholder: "Message \(model.selectedContact?.name ?? "")…",
                 onSend: { model.send(text: $0) },
@@ -172,14 +172,14 @@ struct HeaderButtons: View {
             HiddenBadge()
                 .padding(.trailing, 4)
             if let onTogglePin = chrome.onTogglePin {
-                IconButton(systemName: chrome.isPinned ? "pin.fill" : "pin", tint: chrome.isPinned ? Theme.accent : Theme.textSecondary, action: onTogglePin)
+                IconButton(systemName: chrome.isPinned ? "pin.fill" : "pin", label: chrome.isPinned ? "Unpin" : "Pin", tint: chrome.isPinned ? Theme.accent : Theme.textSecondary, action: onTogglePin)
             }
             if model.settings.lockType != .none {
-                IconButton(systemName: "lock") { model.isLocked = true }
+                IconButton(systemName: "lock", label: "Lock") { model.isLocked = true }
             }
-            IconButton(systemName: "gearshape") { model.screen = .settings }
+            IconButton(systemName: "gearshape", label: "Settings") { model.screen = .settings }
             if let onClose = chrome.onClose {
-                IconButton(systemName: "xmark", action: onClose)
+                IconButton(systemName: "xmark", label: "Close", action: onClose)
             }
         }
     }

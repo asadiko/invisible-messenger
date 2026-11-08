@@ -22,6 +22,8 @@ enum Theme {
 /// Small icon button used across the chat chrome (no tooltips: they would be separate, capturable windows).
 struct IconButton: View {
     let systemName: String
+    /// Spoken by VoiceOver and used by the UI tests.
+    let label: String
     var tint: Color = Theme.textSecondary
     let action: () -> Void
 
@@ -34,6 +36,7 @@ struct IconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }
 

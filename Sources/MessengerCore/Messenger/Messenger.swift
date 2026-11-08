@@ -96,6 +96,8 @@ public final class Messenger {
     /// Attachment transfers in progress, keyed by message id, valued by the session carrying them.
     private var outgoingInFlight: [UUID: ObjectIdentifier] = [:]
     private var ticker: Task<Void, Never>?
+    /// False before start() and after stop(): nothing dials, and handshakes that finish late are refused.
+    private(set) var isRunning = false
     var pairingConnectionHandler: ((FramedConnection, Data) -> Void)?
     var hostingPairing: PairingSession?
     /// How long a pairing code stays valid.
@@ -114,6 +116,7 @@ public final class Messenger {
     // MARK: Lifecycle
 
     public func start() throws {
+        isRunning = true
         listener.onConnection = { [weak self] connection, kind, first in
             self?.route(connection, kind: kind, first: first)
         }
@@ -129,6 +132,7 @@ public final class Messenger {
     }
 
     public func stop() {
+        isRunning = false
         hostingPairing?.cancel()
         ticker?.cancel()
         ticker = nil
@@ -259,6 +263,7 @@ public final class Messenger {
     }
 
     func tick() {
+        guard isRunning else { return }
         let now = Date()
         for peer in discovered {
             let id = DeviceID(rawValue: peer.name)
@@ -324,7 +329,7 @@ public final class Messenger {
 
     private func adopt(_ session: SecureSession) {
         let id = session.peerID
-        guard store.contact(id) != nil else { session.close(); return }
+        guard isRunning, store.contact(id) != nil else { session.close(); return }
         if let existing = sessions[id] {
             let age = Date().timeIntervalSince(sessionStarted[id] ?? .distantPast)
             if age < duplicateWindow {

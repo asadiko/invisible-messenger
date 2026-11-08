@@ -78,7 +78,14 @@ final class AppModel {
     func isOnline(_ id: DeviceID) -> Bool { online.contains(id) }
     func contact(_ id: DeviceID?) -> Contact? { contacts.first { $0.id == id } }
 
-    init(profile: Profile, settings: AppSettings, secrets: SecretStore, identity: DeviceIdentity, store: ChatStore) {
+    init(
+        profile: Profile,
+        settings: AppSettings,
+        secrets: SecretStore,
+        identity: DeviceIdentity,
+        store: ChatStore,
+        directory: PeerDirectory? = nil
+    ) {
         self.profile = profile
         self.settings = settings
         self.secrets = secrets
@@ -87,8 +94,8 @@ final class AppModel {
             identity: identity,
             displayName: settings.displayName,
             store: store,
-            advertise: true,
-            directory: BonjourDirectory()
+            advertise: directory == nil,
+            directory: directory ?? BonjourDirectory()
         ))
         messenger.onEvent = { [weak self] event in self?.handle(event) }
         refreshContacts()
