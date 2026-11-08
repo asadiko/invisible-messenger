@@ -1,3 +1,5 @@
+<img src="docs/images/icon.png" width="128" alt="Invisible Messenger icon">
+
 # Invisible Messenger
 
 A private chat for Macs on the same Wi-Fi that **doesn't show up in screen sharing, screen recordings or screenshots**. You can keep talking to a colleague while you present in Zoom, Meet or Teams, record a demo, or share your whole screen.
@@ -115,7 +117,10 @@ A camera pointed at your screen sees everything, of course. Before relying on it
 swift test                       # core (crypto, protocol, storage, networking, pairing) and app model tests
 scripts/build-app.sh --debug     # debug build
 scripts/run-pair-demo.sh         # two separate copies ("alice" and "bob") to try pairing on one Mac
+scripts/make-icon.sh             # redraw Resources/AppIcon.icns (designs: notch, eye, ghost, glass)
 ```
+
+The app icon is drawn in code (`scripts/make-icon.swift`). The other designs are in [docs/images/icon-options.png](docs/images/icon-options.png); `scripts/make-icon.sh eye`, for example, switches to one of them.
 
 `IM_PROFILE=<name>` gives a copy of the app its own data folder, Keychain items and preferences. The code is split in two:
 - `Sources/MessengerCore`: everything testable without a UI.
